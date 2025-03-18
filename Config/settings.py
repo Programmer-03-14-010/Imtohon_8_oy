@@ -1,17 +1,18 @@
 from datetime import timedelta
 from pathlib import Path
 
+from decouple import  config
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m(yr2z8d=&yr$&pcpbg@!+uqj9pp#ljkv6nt3im&0=po#whi_l'
+SECRET_KEY = config('SECRET_KEY')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG')
+
 ALLOWED_HOSTS = []
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -48,7 +49,12 @@ MIDDLEWARE = [
 
 ]
 
-
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),  # Access token muddati 15 daqiqa
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),  # Refresh token muddati 7 kun
+    "ROTATE_REFRESH_TOKENS": True,  # Har safar yangilaganda yangi refresh token berish
+    "BLACKLIST_AFTER_ROTATION": True,  # Eskirgan refresh tokenni bloklash
+}
 
 ROOT_URLCONF = 'Config.urls'
 

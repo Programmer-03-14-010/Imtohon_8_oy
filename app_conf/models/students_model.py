@@ -3,7 +3,7 @@ from email.policy import default
 from django.db import models
 from django.conf import settings
 
-from app_conf.models.courses_model import Course
+from app_conf.models.courses_model import Course, Subject
 from app_conf.models.courses_model import *
 from app_conf.models.staffs_model import *
 from app_conf.models.admin_model import *
@@ -36,6 +36,7 @@ class StudentModel(models.Model):
     group = models.ForeignKey('Group', on_delete=models.CASCADE, related_name='student_groups')
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     is_line = models.BooleanField(default=False)
+    is_finished = models.BooleanField(default=False)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
     descriptions = models.CharField(max_length=500, blank=True, null=True)

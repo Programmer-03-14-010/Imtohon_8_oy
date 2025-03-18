@@ -1,8 +1,12 @@
 import random
-from calendar import Month
-from datetime import timedelta
+from collections import defaultdict, Counter
+from datetime import timedelta, datetime
 from django.db.models import Q
 from django.core.paginator import Paginator
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from rest_framework import permissions
 
@@ -15,7 +19,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import check_password
 
-from .models import Subject, Homework
+from rest_framework.authentication import TokenAuthentication
+
 from .serializers import *
 from django.db.models import Count
 from rest_framework.permissions import IsAuthenticated
@@ -24,6 +29,10 @@ from django.contrib.auth import authenticate, login, logout
 from drf_yasg import openapi
 from fastapi import FastAPI
 
+
+from django.http import Http404
+from django.db.utils import IntegrityError
+from rest_framework.exceptions import ValidationError
 
 from .models.students_model import *
 
@@ -35,7 +44,13 @@ from .models.User_model import *
 
 app = FastAPI()
 
+
+
+
 class ChangePasswordView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Foydalanuvchi parolini o‘zgartirish uchun POST so‘rov.",
         request_body=ChangePasswordSerializer,
@@ -44,40 +59,25 @@ class ChangePasswordView(APIView):
             400: openapi.Response(description="Xato: Eski parol noto‘g‘ri yoki ma’lumotlar noto‘g‘ri"),
             401: openapi.Response(description="Tizimga kirmagan")
         },
-        manual_parameters=[
-            openapi.Parameter('Authorization', openapi.IN_HEADER, description="JWT token", type=openapi.TYPE_STRING, required=True),
-        ]
     )
     def post(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
         if serializer.is_valid():
             user = request.user
-            if not user.is_authenticated:
-                return Response({"error": "Siz tizimga kirmagansiz"}, status=status.HTTP_401_UNAUTHORIZED)
             if not check_password(serializer.validated_data['old_password'], user.password):
                 return Response({"error": "Eski parol noto‘g‘ri"}, status=status.HTTP_400_BAD_REQUEST)
+
             user.set_password(serializer.validated_data['new_password'])
             user.save()
             return Response({"message": "Parol muvaffaqiyatli o‘zgartirildi"}, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class LoginView(APIView):
     @swagger_auto_schema(
         operation_description="Foydalanuvchini autentifikatsiya qilish uchun POST so‘rov.",
         request_body=LoginSerializer,
-        responses={
-            200: openapi.Response(
-                description="Muvaffaqiyatli kirish",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'refresh': openapi.Schema(type=openapi.TYPE_STRING, description="Refresh token"),
-                        'access': openapi.Schema(type=openapi.TYPE_STRING, description="Access token"),
-                    }
-                )
-            ),
-            400: openapi.Response(description="Login yoki parol xato")
-        }
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -92,51 +92,35 @@ class LoginView(APIView):
                 }, status=status.HTTP_200_OK)
         return Response({"error": "Login yoki parol xato"}, status=status.HTTP_400_BAD_REQUEST)
 
+
 class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Foydalanuvchini chiqarish uchun POST so‘rov.",
         request_body=LogoutSerializer,
-        responses={
-            200: openapi.Response(description="Muvaffaqiyatli chiqish qilindi"),
-            400: openapi.Response(description="Xato")
-        },
-        manual_parameters=[
-            openapi.Parameter('Authorization', openapi.IN_HEADER, description="JWT token", type=openapi.TYPE_STRING, required=True),
-        ]
     )
     def post(self, request):
-        serializer = LogoutSerializer(data=request.data)
-        if serializer.is_valid():
-            logout(request)
-            return Response({"message": "Muvaffaqiyatli chiqish qilindi"}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logout(request)
+        return Response({"message": "Muvaffaqiyatli chiqish qilindi"}, status=status.HTTP_200_OK)
+
 
 class MeView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Foydalanuvchi haqidagi ma’lumotlarni olish uchun GET so‘rov.",
-        responses={
-            200: MeSerializer,
-            401: openapi.Response(description="Tizimga kirmagan")
-        },
-        manual_parameters=[
-            openapi.Parameter('Authorization', openapi.IN_HEADER, description="JWT token", type=openapi.TYPE_STRING, required=True),
-        ]
     )
     def get(self, request):
-        if not request.user.is_authenticated:
-            return Response({"error": "Siz tizimga kirmagansiz"}, status=status.HTTP_401_UNAUTHORIZED)
         serializer = MeSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class ResetPasswordView(APIView):
     @swagger_auto_schema(
         operation_description="Parolni tiklash uchun OTP kod yuborish uchun POST so‘rov.",
         request_body=ResetPasswordSerializer,
-        responses={
-            200: openapi.Response(description="OTP kod terminalda ko‘rsatildi"),
-            404: openapi.Response(description="Foydalanuvchi topilmadi"),
-            400: openapi.Response(description="Xato")
-        }
     )
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
@@ -146,24 +130,19 @@ class ResetPasswordView(APIView):
                 otp = random.randint(100000, 999999)
                 user.otp_code = str(otp)
                 user.save()
-                # Email o‘rniga terminalga chiqaramiz
                 print(f"Foydalanuvchi {user.username} uchun OTP kod: {otp}")
                 return Response({"message": "OTP kod terminalda ko‘rsatildi"}, status=status.HTTP_200_OK)
             return Response({"error": "Foydalanuvchi topilmadi"}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class SetNewPasswordView(APIView):
+    authentication_classes = [TokenAuthentication]
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Yangi parolni o‘rnatish uchun POST so‘rov.",
         request_body=SetNewPasswordSerializer,
-        responses={
-            200: openapi.Response(description="Parol muvaffaqiyatli o‘zgartirildi"),
-            400: openapi.Response(description="Noto‘g‘ri token yoki xato"),
-            401: openapi.Response(description="Tizimga kirmagan")
-        },
-        manual_parameters=[
-            openapi.Parameter('Authorization', openapi.IN_HEADER, description="JWT token", type=openapi.TYPE_STRING, required=True),
-        ]
     )
     def post(self, request):
         serializer = SetNewPasswordSerializer(data=request.data)
@@ -177,42 +156,29 @@ class SetNewPasswordView(APIView):
             return Response({"error": "Noto‘g‘ri token"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class TokenRefreshView(APIView):
     @swagger_auto_schema(
         operation_description="Access tokenni yangilash uchun POST so‘rov.",
         request_body=TokenRefreshSerializer,
-        responses={
-            200: openapi.Response(
-                description="Yangi access token",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'access': openapi.Schema(type=openapi.TYPE_STRING, description="Access token"),
-                    }
-                )
-            ),
-            400: openapi.Response(description="Noto‘g‘ri refresh token")
-        }
     )
     def post(self, request):
         serializer = TokenRefreshSerializer(data=request.data)
         if serializer.is_valid():
+            refresh_token = serializer.validated_data.get('refresh_token')
             try:
-                refresh_token = RefreshToken(serializer.validated_data['refresh_token'])
-                new_access_token = str(refresh_token.access_token)
+                refresh = RefreshToken(refresh_token)
+                new_access_token = str(refresh.access_token)
                 return Response({'access': new_access_token}, status=status.HTTP_200_OK)
             except Exception:
                 return Response({"error": "Noto‘g‘ri refresh token"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class VerifyOtpView(APIView):
     @swagger_auto_schema(
         operation_description="OTP kodni tekshirish uchun POST so‘rov.",
         request_body=VerifyOtpSerializer,
-        responses={
-            200: openapi.Response(description="OTP muvaffaqiyatli tasdiqlandi"),
-            400: openapi.Response(description="Noto‘g‘ri OTP kod")
-        }
     )
     def post(self, request):
         serializer = VerifyOtpSerializer(data=request.data)
@@ -224,8 +190,7 @@ class VerifyOtpView(APIView):
                 return Response({"message": "OTP muvaffaqiyatli tasdiqlandi"}, status=status.HTTP_200_OK)
             return Response({"error": "Noto‘g‘ri OTP kod"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    
+
 
 class CourseListCreateView(APIView):
     @swagger_auto_schema(
@@ -487,6 +452,8 @@ class HomeworkReviewListCreateView(APIView):
 
 
 class SubjectListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(request_body=SubjectSerializer, responses={201: SubjectSerializer})
     def post(self, request):
         serializer = SubjectSerializer(data=request.data)
@@ -496,6 +463,8 @@ class SubjectListCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class SubjectDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, id):
         subject = get_object_or_404(Subject, id=id)
         serializer = SubjectSerializer(subject)
@@ -636,23 +605,22 @@ class TableDetailView(APIView):
 class AdminListCreateApi(APIView):
     @swagger_auto_schema(
         operation_description="Yangi admin yaratish",
-        request_body=AdminSerializer,
+        request_body=UserAndAdminSerializer,
         responses={
-            201: AdminSerializer(),
+            201: UserAndAdminSerializer(),
             400: "Xato",
         }
     )
     def post(self, request):
-        serializer = AdminSerializer(data=request.data)
+        serializer = UserAndAdminSerializer(data=request.data)
         if serializer.is_valid():
-            admin = serializer.save(commit=False)
+            admin = serializer.save()
             admin.is_staff = True
             admin.is_superuser = True
-            admin.set_password(serializer.validated_data['password'])
-            admin.save()
+            admin.set_password(serializer.validated_data['password'])  # Parolni xashlash
+            admin.save()  # Qayta saqlash
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 class AdminDetailApi(APIView):
     @swagger_auto_schema(
@@ -687,17 +655,37 @@ class AdminDetailApi(APIView):
         return Response({'detail': 'Admin deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
 
 
+from rest_framework.exceptions import NotFound
+
 
 class UserListApi(APIView):
-    @swagger_auto_schema(
-        operation_summary="Get list of Users",
-        operation_description="Returns a list of all users.",
-        responses={200: UserSerializer(many=True)}
-    )
-    def get(self, request):
-        users = User.objects.all()
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data)
+    """
+    Foydalanuvchilar ro'yxatini yoki bitta foydalanuvchini olish uchun API
+    """
+
+    def get(self, request, id=None):
+        try:
+            if id:
+                if not str(id).isdigit():
+                    return Response(
+                        {"error": "ID noto‘g‘ri formatda bo‘lishi kerak (raqam)."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                user = get_object_or_404(User, id=id)
+                serializer = UserSerializer(user)
+            else:
+                users = User.objects.all()
+                serializer = UserSerializer(users, many=True)
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except NotFound:
+            return Response(
+                {"error": "Bunday foydalanuvchi topilmadi!"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 
 
 class DepartmentListCreateAPIView(APIView):
@@ -839,10 +827,13 @@ class StudentAPIView(APIView):
             return Response(student_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class StudentDetailAPIView(APIView):
-    def get(self, request):
-        students = StudentModel.objects.select_related('user').prefetch_related('group', 'course').all()
-        groups = StudentGroupModel.objects.all()
-        courses = Course.objects.all()
+
+    def get(self, request, id):
+
+        students = get_object_or_404(StudentModel, id=id)
+        serializer = StudentSerializer(students)
+        return Response(serializer.data)
+
 
         serializer_student = StudentSerializer(students, many=True)
         serializer_group = GroupSerializer(groups, many=True)
@@ -908,49 +899,78 @@ class StatisticsView(APIView):
         return Response(stats)
 
 
+class StudentsByRegistrationView(APIView):
+    @swagger_auto_schema(request_body=DateRangeSerializer)
+    def post(self, request):
+        serializer = DateRangeSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class StudentStatusApiView(APIView):
-    @swagger_auto_schema(
-        manual_parameters=[
-            openapi.Parameter(
-                'date1', openapi.IN_QUERY, description="Boshlang‘ich sana (YYYY-MM-DD)",
-                type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, required=True
-            ),
-            openapi.Parameter(
-                'date2', openapi.IN_QUERY, description="Tugash sanasi (YYYY-MM-DD)",
-                type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, required=True
-            ),
-        ],
-        responses={200: StudentStatusSerializer(many=True)},
-        operation_description="Berilgan sana oralig‘ida har bir kurs bo‘yicha talabalar statistikasini qaytaradi."
-    )
-    def get(self, request):
-        date1 = request.query_params.get('date1')
-        date2 = request.query_params.get('date2')
+        start_date = datetime.combine(serializer.validated_data.get('start_date'), datetime.min.time())
+        end_date = datetime.combine(serializer.validated_data.get('end_date'), datetime.max.time())
 
-        if not date1 or not date2:
-            return Response({"error": "date1 va date2 parametrlari kerak"}, status=status.HTTP_400_BAD_REQUEST)
+        students = StudentModel.objects.filter(created__range=[start_date, end_date]).prefetch_related('course')
 
-        date1 = parse_date(date1)
-        date2 = parse_date(date2)
+        # Faqat shu sanalar oralig‘idagi o‘quvchilarni hisobga olamiz
+        is_studying = students.filter(is_line=True).count()
+        is_compleated = students.filter(is_finished=True).count()
 
-        if not date1 or not date2:
-            return Response({"error": "Noto‘g‘ri sana formati (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+        # Kurslar bo‘yicha ro‘yxatdan o‘tganlar statistikasi
+        course_counter = Counter()
+        for student in students:
+            course_counter[student.course.name] += 1
 
-        if date1 > date2:
-            return Response({"error": "date1 date2 dan kichik yoki teng bo‘lishi kerak"}, status=status.HTTP_400_BAD_REQUEST)
+        response_data = {
+            'course_registrations': [{'course': course, 'student_count': count} for course, count in course_counter.items()],
+            'enrolled': is_studying,
+            'graduated ': is_compleated,
+        }
 
-        #  To‘g‘ri ManyToMany bog‘lanishini ishlatish
-        groups = Group.objects.annotate(
-            enrolled_count=Count('students', filter=Q(students__enrollment_date__range=[date1, date2])),
-            active_students=Count('students', filter=Q(students__status='active')),
-            graduated_students=Count('students', filter=Q(students__status='graduated'))
-        )
+        return Response(response_data, status=status.HTTP_200_OK)
 
-        serializer = StudentStatusSerializer(groups, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+# class StudentStatusApiView(APIView):
+#     @swagger_auto_schema(
+#         manual_parameters=[
+#             openapi.Parameter(
+#                 'date1', openapi.IN_QUERY, description="Boshlang‘ich sana (YYYY-MM-DD)",
+#                 type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, required=True
+#             ),
+#             openapi.Parameter(
+#                 'date2', openapi.IN_QUERY, description="Tugash sanasi (YYYY-MM-DD)",
+#                 type=openapi.TYPE_STRING, format=openapi.FORMAT_DATE, required=True
+#             ),
+#         ],
+#         responses={200: StudentStatusSerializer(many=True)},
+#         operation_description="Berilgan sana oralig‘ida har bir kurs bo‘yicha talabalar statistikasini qaytaradi."
+#     )
+#     def get(self, request):
+#         date1 = request.query_params.get('date1')
+#         date2 = request.query_params.get('date2')
+#
+#         if not date1 or not date2:
+#             return Response({"error": "date1 va date2 parametrlari kerak"}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         date1 = parse_date(date1)
+#         date2 = parse_date(date2)
+#
+#         if not date1 or not date2:
+#             return Response({"error": "Noto‘g‘ri sana formati (YYYY-MM-DD)"}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         if date1 > date2:
+#             return Response({"error": "date1 date2 dan kichik yoki teng bo‘lishi kerak"}, status=status.HTTP_400_BAD_REQUEST)
+#
+#         #  To‘g‘ri ManyToMany bog‘lanishini ishlatish
+#         groups = Group.objects.annotate(
+#             enrolled_count=Count('students', filter=Q(students__enrollment_date__range=[date1, date2])),
+#             active_students=Count('students', filter=Q(students__status='active')),
+#             graduated_students=Count('students', filter=Q(students__status='graduated'))
+#         )
+#
+#         serializer = StudentStatusSerializer(groups, many=True)
+#         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+@method_decorator(csrf_exempt, name='dispatch')  # CSRF tekshiruvini o‘chiradi
 class StudentIDSView(APIView):
     @swagger_auto_schema(
         request_body=openapi.Schema(
@@ -967,7 +987,6 @@ class StudentIDSView(APIView):
         students = StudentModel.objects.filter(id__in=student_ids)
         serializer = StudentSerializer(students, many=True)
         return Response({"students": serializer.data})
-
 
 
 
@@ -1027,44 +1046,85 @@ class ParentDetailAPIView(APIView):
         parent.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+class PaymentMonthDetailAPIView(APIView):
+    @swagger_auto_schema(responses={200: PaymentMonthSerializer(many=True)})
+    def get(self, request, id=None):
+        """ Agar `id` berilsa bitta, aks holda barcha ma'lumotlarni qaytaradi """
+        if id:
+            month = get_object_or_404(PaymentMonth, id=id)
+            serializer = PaymentMonthSerializer(month)
+            return Response({"message": "Oylik to‘lov ma'lumoti", "data": serializer.data})
+        else:
+            months = PaymentMonth.objects.all()
+            serializer = PaymentMonthSerializer(months, many=True)
+            return Response({"message": "Barcha oylik to‘lovlar", "data": serializer.data})
+
+
+    @swagger_auto_schema(request_body=PaymentMonthSerializer, responses={200: PaymentMonthSerializer()})
+    def put(self, request, id):
+        month = get_object_or_404(PaymentMonth, id=id)
+        serializer = PaymentMonthSerializer(month, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Ma'lumot muvaffaqiyatli yangilandi!", "data": serializer.data})
+        return Response({"error": "Yangilashda xatolik yuz berdi!", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
+    @swagger_auto_schema(responses={204: 'No Content'})
+    def delete(self, request, id):
+        month = get_object_or_404(PaymentMonth, id=id)
+        month.delete()
+        return Response({"message": "To‘lov oynasi muvaffaqiyatli o‘chirildi!"}, status=status.HTTP_204_NO_CONTENT)
+
 
 class PaymentMonthAPIView(APIView):
-    @swagger_auto_schema(responses={200: PaymentMonthSerializer(many=True)})
-    def get(self, request, id):
-        month = get_object_or_404(Month, id=id)
-        serializer = PaymentMonthSerializer(month)
-        return Response(serializer.data)
+    def handle_exception(self, exc):
+        """ Xatolarni chiroyli formatda chiqarish """
+        if isinstance(exc, Http404):
+            return Response({"error": "Ma'lumot topilmadi!"}, status=status.HTTP_404_NOT_FOUND)
+        elif isinstance(exc, ValidationError):
+            return Response({"error": "Kiritilgan ma'lumot xato!", "details": exc.detail}, status=status.HTTP_400_BAD_REQUEST)
+        elif isinstance(exc, IntegrityError):
+            return Response({"error": "Bazaga ma'lumot qo‘shishda xatolik yuz berdi!"}, status=status.HTTP_400_BAD_REQUEST)
+        return super().handle_exception(exc)  # Standart DRF xatolarini saqlab qolish
 
     @swagger_auto_schema(request_body=PaymentMonthSerializer)
     def post(self, request):
         serializer = PaymentMonthSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "To‘lov oynasi muvaffaqiyatli qo‘shildi!", "data": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({"error": "Kiritilgan ma'lumotlar noto‘g‘ri!", "details": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
 
-    @swagger_auto_schema(request_body=PaymentMonthSerializer, responses={200: PaymentMonthSerializer()})
-    def put(self, request, pk):
-        month = get_object_or_404(PaymentMonth, pk=pk)
-        serializer = PaymentMonthSerializer(month, data=request.data)
+class PaymentTypeDetailAPIView(APIView):
+    @swagger_auto_schema(responses={200: PaymentTypeSerializer(many=True)})
+    def get(self, request, id=None):
+        """ Agar 'id' berilsa bitta, aks holda barcha ma'lumotlarni qaytaradi """
+        if id:
+            type = get_object_or_404(PaymentType, id=id)
+            serializer = PaymentTypeSerializer(type)
+            return Response({"message": "To'lov turi", "data": serializer.data})
+        else:
+            types = PaymentType.objects.all()
+            serializer = PaymentTypeSerializer(types, many=True)
+            return Response({"message": "Barcha to'lov turlari", "data": serializer.data})
+
+    @swagger_auto_schema(request_body=PaymentTypeSerializer, responses={200: PaymentTypeSerializer()})
+    def put(self, request, id):
+        type_obj = get_object_or_404(PaymentType, id=id)
+        serializer = PaymentTypeSerializer(type_obj, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @swagger_auto_schema(responses={204: 'No Content'})
-    def delete(self, request, pk):
-        month = get_object_or_404(PaymentMonth, pk=pk)
-        month.delete()
+    def delete(self, request, id):
+        type_obj = get_object_or_404(PaymentType, id=id)
+        type_obj.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-class PaymentTypeAPIView(APIView):
-    @swagger_auto_schema(responses={200: PaymentTypeSerializer(many=True)})
-    def get(self, request, id):
-        type = get_object_or_404({PaymentType}, id=id)
-        serializer = PaymentTypeSerializer(type)
-        return Response(serializer.data)
 
+class PaymentTypeAPIView(APIView):
     @swagger_auto_schema(request_body=PaymentTypeSerializer)
     def post(self, request):
         serializer = PaymentTypeSerializer(data=request.data)
@@ -1073,28 +1133,37 @@ class PaymentTypeAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @swagger_auto_schema(request_body=PaymentTypeSerializer, responses={200: PaymentTypeSerializer()})
-    def put(self, request, pk):
-        type_obj = get_object_or_404(PaymentType, pk=pk)
-        serializer = PaymentTypeSerializer(type_obj, data=request.data)
+
+class PaymentDetailAPIView(APIView):
+    @swagger_auto_schema(responses={200: PaymentTypeSerializer(many=True)})
+    def get(self, request, id=None):
+        """ Agar 'id' berilsa bitta, aks holda barcha ma'lumotlarni qaytaradi """
+        if id:
+            payment = get_object_or_404(Payment, id=id)
+            serializer = PaymentSerializer(payment)
+            return Response({"message": "To'lovni ko'rish", "data": serializer.data})
+        else:
+            payments = Payment.objects.all()
+            serializer = PaymentSerializer(payments, many=True)
+            return Response({"message": "Barcha to'lovlar", "data": serializer.data})
+
+    @swagger_auto_schema(request_body=PaymentSerializer, responses={200: PaymentSerializer()})
+
+    def put(self, request, id):
+        payment = get_object_or_404(Payment, id=id)
+        serializer = PaymentSerializer(payment, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @swagger_auto_schema(responses={204: 'No Content'})
-    def delete(self, request, pk):
-        type_obj = get_object_or_404(PaymentType, pk=pk)
-        type_obj.delete()
+    def delete(self, request, id):
+        payment = get_object_or_404(Payment, id=id)
+        payment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class PaymentAPIView(APIView):
-    @swagger_auto_schema(responses={200: PaymentSerializer(many=True)})
-    def get(self, request, id):
-        payment = get_object_or_404(Payment, id=id)
-        serializer = PaymentSerializer(payment)
-        return Response(serializer.data)
-
     @swagger_auto_schema(request_body=PaymentSerializer)
     def post(self, request):
         serializer = PaymentSerializer(data=request.data)
@@ -1103,20 +1172,7 @@ class PaymentAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @swagger_auto_schema(request_body=PaymentSerializer, responses={200: PaymentSerializer()})
-    def put(self, request, pk):
-        payment = get_object_or_404(Payment, pk=pk)
-        serializer = PaymentSerializer(payment, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @swagger_auto_schema(responses={204: 'No Content'})
-    def delete(self, request, pk):
-        payment = get_object_or_404(Payment, pk=pk)
-        payment.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class TeacherAPIView(APIView):
     pagination_class = PageNumberPagination
@@ -1159,13 +1215,11 @@ class TeacherGroupsAPIView(APIView):
             404: openapi.Response(description="Teacher not found"),
         },
     )
-    def get(self, request):
-        """Hozirgi foydalanuvchi bo‘lgan o‘qituvchining guruhlarini qaytaradi."""
-        teacher = get_object_or_404(TeacherModel, user=request.user)  # User orqali olish
-
+    def get(self, request, id):
+        teacher = get_object_or_404(TeacherModel, id=id)  # O‘qituvchi obyektini olish
         groups = teacher.groups.all()  # O‘qituvchiga tegishli barcha guruhlar
-        serializer = TeacherGroupSerializer(groups, many=True)  # `many=True` qo‘shildi
 
+        serializer = TeacherGroupSerializer(groups, many=True)  # TO‘G‘RI O‘ZGARTIRISH
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -1173,14 +1227,26 @@ class StudentGroupsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(
-        responses={200: GroupSerializer(many=True)},
-        operation_description="Talaba o'ziga tegishli guruhlarni ko'rishi mumkin."
+        manual_parameters=[
+            openapi.Parameter(
+                'group_id',
+                openapi.IN_PATH,
+                description="Talabaning guruh ID-si",
+                type=openapi.TYPE_INTEGER
+            )
+        ],
+        responses={200: GroupSerializer()},
+        operation_description="Talaba o'ziga tegishli aniq bir guruhni ko'rishi mumkin."
     )
-    def get(self, request):
-        student = request.user.studentmodel
-        groups = student.groups.all()
-        serializer = GroupSerializer(groups, many=True)
-        return Response(serializer.data)
+    def get(self, request, group_id):
+        student = get_object_or_404(StudentModel, user=request.user)
+
+        # Talaba faqat o‘zining guruhiga tegishli bo‘lsa, ko‘ra olishi kerak
+        if student.group.id != group_id:
+            return Response({'error': 'Siz bu guruhga tegishli emassiz!'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = GroupSerializer(student.group)  # To‘g‘ridan-to‘g‘ri chaqiramiz
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class GroupStudentsAPIView(APIView):
@@ -1252,42 +1318,44 @@ class GroupMonthlyDataAPIView(APIView, PageNumberPagination):
         if not group_id or not month:
             return Response({"error": "Guruh ID va oy parametrlari kerak"}, status=400)
 
-        try:
-            group = Group.objects.get(id=group_id)
-        except Group.DoesNotExist:
-            return Response({"error": "Bunday guruh topilmadi"}, status=404)
+        # Guruhni olish
+        group = get_object_or_404(Group, id=group_id)
 
         user = request.user
 
-        if hasattr(user, "teachermodel"):  # O‘qituvchi bo‘lsa
-            if group.teacher != user.teachermodel:
+        # Foydalanuvchi ruxsatini tekshirish
+        if hasattr(user, "teachermodel"):  # Agar foydalanuvchi o‘qituvchi bo‘lsa
+            if not group.teacher.filter(id=user.teachermodel.id).exists():  # ManyToManyField uchun
                 return Response({"error": "Bu guruhga kirish huquqiga ega emassiz"}, status=403)
-        elif hasattr(user, "studentmodel"):  # Talaba bo‘lsa
-            if group not in user.studentmodel.groups.all():
+        elif hasattr(user, "studentmodel"):  # Agar foydalanuvchi talaba bo‘lsa
+            if user.studentmodel.group != group:  # Agar ForeignKey bo‘lsa
                 return Response({"error": "Bu guruhga kirish huquqiga ega emassiz"}, status=403)
         else:
             return Response({"error": "Foydalanuvchi turi noma’lum"}, status=403)
 
-        try:
-            start_date = parse_date(f"{month}-01")
-            end_date = start_date + timedelta(days=31)  # Oxirgi kunni hisoblash
-        except:
+        # Sana formatini tekshirish
+        start_date = parse_date(f"{month}-01")
+        if not start_date:
             return Response({"error": "Noto‘g‘ri sana formati (YYYY-MM)"}, status=400)
 
+        # Oyning oxirgi kunini hisoblash
+        last_day = calendar.monthrange(start_date.year, start_date.month)[1]
+        end_date = date(start_date.year, start_date.month, last_day)
+
+        # Davomatni olish
         attendances = AttendanceModel.objects.filter(group=group, date__range=(start_date, end_date))
         result_page = self.paginate_queryset(attendances, request, view=self)
         serializer = AttendanceSerializer(result_page, many=True)
 
         return self.get_paginated_response(serializer.data)
 
-
 class StudentHomeworkAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(responses={200: HomeworkSerializer(many=True)})
     def get(self, request):
-        student = StudentModel.objects.get(user=request.user)
-        homeworks = Homework.objects.filter(group__in=student.groups.all())
+        student = get_object_or_404(StudentModel, user=request.user)
+        homeworks = Homework.objects.filter(group=student.group)  # ✅ ForeignKey bo‘lsa, `.all()` kerak emas
         serializer = HomeworkSerializer(homeworks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -1312,27 +1380,32 @@ class StudentAttendanceAPIView(APIView):
         responses={200: AttendanceSerializer(many=True)}
     )
     def get(self, request):
-        student = StudentModel.objects.get(user=request.user)
+        student = get_object_or_404(StudentModel, user=request.user)
+
+        # Talabaning davomatini olish
         attendance_qs = AttendanceModel.objects.filter(student=student).order_by('-date')
+
+        # Paginatsiya
         paginator = Paginator(attendance_qs, 30)
         page = request.GET.get('page', 1)
         paginated_data = paginator.get_page(page)
+
+        # Serializatsiya va natija
         serializer = AttendanceSerializer(paginated_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-
 
 class StudentGroupListAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(responses={200: StudentSerializer(many=True)})
     def get(self, request, group_id):
-        student = StudentModel.objects.get(user=request.user)
-        group = student.groups.filter(id=group_id).first()
-        if not group:
-            return Response({'error': 'Siz bu guruhga tegishli emassiz'}, status=status.HTTP_403_FORBIDDEN)
-        serializer = StudentSerializer(group.students.all(), many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        student = get_object_or_404(StudentModel, user=request.user)
 
+        if student.group.id != group_id:  # ✅ "filter" o‘rniga to‘g‘ridan-to‘g‘ri tekshirish
+            return Response({'error': 'Siz bu guruhga tegishli emassiz!'}, status=status.HTTP_403_FORBIDDEN)
+
+        serializer = StudentSerializer(student.group.student_groups.all(), many=True)  # "related_name" ishlatish
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class TeacherGroupAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1631,6 +1704,8 @@ class UserListView(APIView):
         return Response(serializer.data)
 
 class CreateSuperUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Superuser yaratish",
         request_body=UserSerializer,
@@ -1639,34 +1714,47 @@ class CreateSuperUserView(APIView):
     def post(self, request):
         data = request.data
         data["is_superuser"] = True
+        data["is_staff"] = True
+        data["is_admin"] = True
         serializer = UserSerializer(data=data)
         if serializer.is_valid():
-            serializer.save()
+            user = serializer.save()
+            user.set_password(data["password"])
+            user.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+
 class CreateStudentView(APIView):
+    permission_classes = [IsAuthenticated]  # Faqat autentifikatsiyadan o‘tgan foydalanuvchilar
+
     @swagger_auto_schema(
         operation_description="Yangi student yaratish",
         request_body=StudentSerializer,
         responses={201: StudentSerializer}
     )
     def post(self, request):
+        if StudentModel.objects.filter(user=request.user).exists():
+            return Response({"error": "Siz allaqachon student sifatida ro‘yxatdan o‘tib bo‘lgansiz!"}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = StudentSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user=request.user)  # Userni avtomatik bog‘lash
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CreateTeacherView(APIView):
     @swagger_auto_schema(
         operation_description="Yangi o‘qituvchi yaratish",
-        request_body=TeacherSerializer,
-        responses={201: TeacherSerializer}
+        request_body=UserAndTeacherSerializer,
+        responses={201: UserAndTeacherSerializer}
     )
     def post(self, request):
-        serializer = TeacherSerializer(data=request.data)
+        serializer = UserAndTeacherSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)

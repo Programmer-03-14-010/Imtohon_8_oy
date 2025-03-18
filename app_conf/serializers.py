@@ -84,7 +84,7 @@ class UserSerializer(serializers.ModelSerializer):
 class AdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'phone', 'full_name', 'is_staff', 'is_admin', 'password']
+        fields = ['id', 'is_staff', 'is_admin']
         extra_kwargs = {'password': {'write_only': True}}
 
     def create(self, validated_data):
@@ -136,6 +136,28 @@ class HomeworkReviewSerializer(serializers.ModelSerializer):
         model = HomeworkReview
         fields = '__all__'
 
+class DateRangeSerializer(serializers.Serializer):
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+
+    def validate(self, data):
+        """ start_date end_date'dan katta bo‘lmasligini tekshiramiz """
+        if data['start_date'] > data['end_date']:
+            raise serializers.ValidationError("Start date end date'dan katta bo‘lishi mumkin emas.")
+        return data
+
+
+
+class CourseRegistrationSerializer(serializers.Serializer):
+    course = serializers.CharField()
+    student_count = serializers.IntegerField()
+
+class StudentsByRegistrationSerializer(serializers.Serializer):
+    registered_by_course = CourseRegistrationSerializer(many=True)
+    studying = serializers.IntegerField()
+    compleated = serializers.IntegerField()
+
+
 class SubjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subject
@@ -161,6 +183,9 @@ class TeacherSerializer(serializers.ModelSerializer):
         model = TeacherModel
         fields = ['id', 'departments', 'course', 'created', 'updated', 'descriptions']
 
+    def create(self, validated_data):
+        validated_data.pop('user', None)
+        return super().create(validated_data)
 
 class TeacherGroupSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(max_length=288)
@@ -226,7 +251,7 @@ class GroupStatsSerializer(serializers.ModelSerializer):
 class GroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentGroupModel
-        fields = ['id', 'title', 'course', 'teacher', "table", 'start_date', 'end_date', 'price', 'descriptions']
+        fields = ['id', 'course', 'price', 'descriptions']
 
 
 # class TeacherGroupSerializer(serializers.ModelSerializer):
@@ -265,6 +290,10 @@ class UserAndWorkerSerializer(serializers.Serializer):
 class UserAndTeacherSerializer(serializers.Serializer):
     user = UserSerializer()
     teacher = TeacherSerializer()
+
+class UserAndAdminSerializer(serializers.Serializer):
+    user = UserSerializer()
+    admin = AdminSerializer()
 
 
 class ParentSerializer(serializers.ModelSerializer):

@@ -10,6 +10,8 @@ from .models.admin_model import *
 
 from .models.User_model import *
 
+admin.site.register(AdminModel)
+
 
 # @admin.register(GroupModel)
 # class GroupModelAdmin(admin.ModelAdmin):
@@ -138,10 +140,10 @@ class UserAdmin(admin.ModelAdmin):
 # class CourseAdmin(admin.ModelAdmin):
 #     list_display = ('title', 'descriptions')
 
-@admin.register(AdminModel)
-class AdminAdmin(admin.ModelAdmin):
-    list_display = ('phone_number', 'full_name', 'is_staff', 'is_super', 'is_active')
-    search_fields = ('phone_number', 'full_name')
+# @admin.register(AdminModel)
+# class AdminAdmin(admin.ModelAdmin):
+#     list_display = ('phone_number', 'full_name', 'is_staff', 'is_super', 'is_active')
+#     search_fields = ('phone_number', 'full_name')
 
 @admin.register(DepartmentModel)
 class DepartmentAdmin(admin.ModelAdmin):
@@ -154,7 +156,7 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(TeacherModel)
 class TeacherAdmin(admin.ModelAdmin):
-     list_display = ('user', 'created', 'updated')
+     list_display = ( 'created', 'updated')
      search_fields = ('user__phone', 'descriptions')
      filter_horizontal = ('departments', 'course')
 

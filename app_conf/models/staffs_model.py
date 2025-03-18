@@ -26,7 +26,6 @@ class TopicModel(models.Model):
 
 
 class TeacherWorkerModel(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=255)
     course = models.CharField(max_length=100)
     start_date = models.DateField()
@@ -36,7 +35,6 @@ class TeacherWorkerModel(models.Model):
         return self.full_name
 
 class TeacherModel(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=255)
     groups = models.ManyToManyField('Group', related_name="teacher_groups")
     departments = models.ManyToManyField('DepartmentModel', related_name='teachers')
@@ -45,8 +43,6 @@ class TeacherModel(models.Model):
     updated = models.DateTimeField(auto_now=True)
     descriptions = models.CharField(max_length=500, null=True, blank=True)
 
-    def __str__(self):
-        return self.user.phone
 
 
 

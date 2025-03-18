@@ -1,17 +1,123 @@
-asgiref              ~=         3.7.2
-Django                ~=        4.2.6
-djangorestframework     ~=      3.14.0
-djangorestframework-simplejwt ~=5.3.0
-drf-yasg                   ~=   1.21.7
-inflection                ~=    0.5.1
-packaging                ~=     23.2
-pip                       ~=    23.0.1
-PyJWT                      ~=   2.8.0
-pytz                       ~=   2023.3.post1
-PyYAML                      ~=   6.0.1
-setuptools                  ~=   58.1.0
-sqlparse                   ~=    0.4.4
-typing_extensions         ~=     4.8.0
-uritemplate               ~=     4.1.1
-django-cors-headers      ~=      4.3.0
-
+absl-py==2.1.0
+aiofiles==23.2.1
+aiohappyeyeballs==2.4.3
+aiohttp==3.9.5
+aiosignal==1.3.1
+altgraph==0.17.4
+annotated-types==0.7.0
+anyio==4.6.0
+asgiref==3.8.1
+attrs==23.2.0
+beautifulsoup4==4.12.3
+bs4==0.0.2
+certifi==2024.7.4
+cffi==1.17.1
+charset-normalizer==3.3.2
+click==8.1.8
+colorama==0.4.6
+comtypes==1.4.6
+contourpy==1.3.0
+cookies==2.2.1
+cryptography==43.0.3
+cycler==0.12.1
+Django==5.1.6
+django-cors-headers==4.7.0
+django-extensions==3.2.3
+django-filter==24.3
+django-modeltranslation==0.19.12
+djangorestframework==3.15.2
+djangorestframework_simplejwt==5.4.0
+drf-yasg==1.21.8
+environs==11.0.0
+fastapi==0.115.11
+fire==0.7.0
+flatbuffers==24.3.25
+fonttools==4.54.1
+frozenlist==1.4.1
+h11==0.14.0
+httpcore==1.0.5
+httpx==0.27.2
+idna==3.7
+inflection==0.5.1
+jax==0.4.33
+jaxlib==0.4.33
+kiwisolver==1.4.7
+magic-filter==1.0.12
+Markdown==3.7
+marshmallow==3.21.3
+matplotlib==3.9.2
+mediapipe==0.10.14
+ml_dtypes==0.5.0
+modules==1.0.0
+multidict==6.0.5
+multipledispatch==1.0.0
+ngrok==1.4.0
+numpy==2.1.1
+opencv-contrib-python==4.10.0.84
+opencv-python==4.10.0.84
+opt_einsum==3.4.0
+outcome==1.3.0.post0
+packaging==24.1
+pefile==2024.8.26
+pillow==10.4.0
+postgres==4.0
+private==0.2.0
+propcache==0.2.0
+property==2.6.2
+protobuf==4.25.5
+psycopg2==2.9.10
+psycopg2-binary==2.9.10
+psycopg2-pool==1.2
+pyaes==1.6.1
+pyasn1==0.6.1
+PyAudio==0.2.14
+pycparser==2.22
+pydantic==2.8.2
+pydantic_core==2.20.1
+pygame==2.6.0
+pyinstaller==6.10.0
+pyinstaller-hooks-contrib==2024.8
+PyJWT==2.10.1
+PyMySQL==1.1.1
+pynput==1.7.7
+pyparsing==3.1.4
+pypiwin32==223
+pyserial==3.5
+PySocks==1.7.1
+python-dateutil==2.9.0.post0
+python-decouple==3.8
+python-dotenv==1.0.1
+python-telegram-bot==21.6
+pyttsx3==2.91
+pytz==2024.2
+pywifi==1.1.12
+pywin32==306
+pywin32-ctypes==0.2.3
+PyYAML==6.0.2
+requests==2.32.3
+rsa==4.9
+scapy==2.6.1
+schedule==1.2.2
+scipy==1.14.1
+selenium==4.24.0
+setuptools==74.1.2
+six==1.16.0
+sniffio==1.3.1
+sortedcontainers==2.4.0
+sounddevice==0.5.0
+soupsieve==2.6
+sqlparse==0.5.2
+starlette==0.46.1
+Telethon==1.38.1
+termcolor==2.5.0
+trio==0.26.2
+trio-websocket==0.11.1
+typing_extensions==4.12.2
+tzdata==2024.2
+uritemplate==4.1.1
+urllib3==2.2.2
+utils==1.0.2
+uvicorn==0.34.0
+websocket-client==1.8.0
+wsproto==1.2.0
+yarl==1.9.4
