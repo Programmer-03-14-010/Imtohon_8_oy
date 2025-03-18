@@ -9,6 +9,7 @@ __pycache__/
 *.egg-info/
 *.pyo
 *.pyd
+
 # Environment variables
 .env
 
@@ -21,7 +22,6 @@ env/
 *.sqlite3
 
 # Django
-*.env
 settings_local.py
 media/
 staticfiles/
