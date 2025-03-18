@@ -1,1 +1,25 @@
-.env/
+# PyCharm specific
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+
+# Logs & DB
+*.log
+*.sqlite3
+
+# Django
+*.env
+settings_local.py
+media/
+staticfiles/
