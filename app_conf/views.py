@@ -1,12 +1,11 @@
 import random
-from collections import defaultdict, Counter
-from datetime import timedelta, datetime
-from django.db.models import Q
+from collections import  Counter
+from datetime import  datetime
 from django.core.paginator import Paginator
-
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import permissions
 
@@ -22,7 +21,6 @@ from django.contrib.auth.hashers import check_password
 from rest_framework.authentication import TokenAuthentication
 
 from .serializers import *
-from django.db.models import Count
 from rest_framework.permissions import IsAuthenticated
 from django.utils.dateparse import parse_date
 from django.contrib.auth import authenticate, login, logout
@@ -193,6 +191,8 @@ class VerifyOtpView(APIView):
 
 
 class CourseListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Yangi kurs yaratish",
         request_body=CourseSerializer,
@@ -204,6 +204,8 @@ class CourseListCreateView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 class CourseDetailView(APIView):
     @swagger_auto_schema(
