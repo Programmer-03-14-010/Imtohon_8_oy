@@ -1421,15 +1421,14 @@ class TeacherGroupAPIView(APIView):
 
 
 class TeacherGroupDetailAPIView(APIView):
+    authentication_classes = [TokenAuthentication]  # Token Authentication
     permission_classes = [IsAuthenticated]
 
+    @method_decorator(csrf_exempt)  # CSRF dan ozod qilish
     @swagger_auto_schema(responses={200: GroupSerializer()})
     def get(self, request, group_id):
-        # O'qituvchini topish yoki xatolik qaytarish
         teacher = get_object_or_404(TeacherModel, user=request.user)
-
-        # Guruhni tekshirish
-        group = get_object_or_404(teacher.groups, id=group_id)
+        group = get_object_or_404(Group, id=group_id, teachers=teacher)
 
         serializer = GroupSerializer(group)
         return Response(serializer.data, status=status.HTTP_200_OK)

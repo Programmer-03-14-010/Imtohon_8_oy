@@ -123,14 +123,14 @@ class HomeworkSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class HomeworkSubmissionSerializer(serializers.ModelSerializer):
-    student = UserSerializer(read_only=True)
+    student = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
     class Meta:
         model = HomeworkSubmission
         fields = '__all__'
 
 class HomeworkReviewSerializer(serializers.ModelSerializer):
-    teacher = UserSerializer(read_only=True)
+    teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
     class Meta:
         model = HomeworkReview
