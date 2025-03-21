@@ -1,7 +1,7 @@
 # PyCharm specific
 .idea/
 .vscode/
-
+.savoljavob
 # Python
 __pycache__/
 *.py[cod]
