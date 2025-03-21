@@ -297,7 +297,10 @@ class GroupsDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+
 class GroupsAddStudentView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Guruhga talabani qo'shish",
         request_body=AddUserSerializer,
@@ -309,13 +312,11 @@ class GroupsAddStudentView(APIView):
             group = get_object_or_404(Group, id=serializer.validated_data['group_id'])
             user = get_object_or_404(User, id=serializer.validated_data['user_id'])
 
-            # Foydalanuvchiga bog‘liq StudentModel obyektini topish
             student = StudentModel.objects.filter(user=user).first()
             if not student:
                 return Response({"error": "Bu foydalanuvchi talaba sifatida ro‘yxatdan o‘tmagan."},
                                 status=status.HTTP_400_BAD_REQUEST)
 
-            # StudentModel obyektini guruhga qo‘shish
             group.students.add(student)
             return Response({"status": "Student added"}, status=status.HTTP_200_OK)
 
@@ -323,7 +324,10 @@ class GroupsAddStudentView(APIView):
 
 
 
+
 class GroupsAddTeacherView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @swagger_auto_schema(
         operation_description="Guruhga ustoz qo'shish",
         request_body=AddUserSerializer,
@@ -333,17 +337,14 @@ class GroupsAddTeacherView(APIView):
         serializer = AddUserSerializer(data=request.data)
         if serializer.is_valid():
             group = get_object_or_404(Group, id=serializer.validated_data['group_id'])
+
             user = get_object_or_404(User, id=serializer.validated_data['user_id'])
 
-            # `user` bilan bog‘liq TeacherModel obyektini topish
-            teacher = TeacherModel.objects.filter(user=request.user).first()
-            if not teacher:
-                return Response({"error": "O‘qituvchi topilmadi."}, status=status.HTTP_404_NOT_FOUND)
-
-            # To‘g‘ri obyektni qo‘shish: `teacher` emas, `teacher.user`!
-            group.teachers.add(teacher.user)
+            teacher = get_object_or_404(TeacherModel, id=user.id)
+            group.teachers.add(teacher.id)
 
             return Response({"status": "Teacher added"}, status=status.HTTP_200_OK)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class GroupsRemoveStudentView(APIView):
