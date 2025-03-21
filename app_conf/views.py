@@ -2,8 +2,7 @@ import random
 from collections import  Counter
 from datetime import  datetime
 from django.core.paginator import Paginator
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 
@@ -21,7 +20,7 @@ from django.contrib.auth.hashers import check_password
 from rest_framework.authentication import TokenAuthentication
 
 from .serializers import *
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils.dateparse import parse_date
 from django.contrib.auth import authenticate, login, logout
 from drf_yasg import openapi
@@ -73,6 +72,8 @@ class ChangePasswordView(APIView):
 
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]  # CSRF tokenni talab qilmaydi
+
     @swagger_auto_schema(
         operation_description="Foydalanuvchini autentifikatsiya qilish uchun POST so‘rov.",
         request_body=LoginSerializer,
@@ -80,16 +81,18 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            user = authenticate(username=serializer.validated_data['phone'], password=serializer.validated_data['password'])
+            phone = serializer.validated_data['phone']
+            password = serializer.validated_data['password']
+
+            user = authenticate(username=phone, password=password)
             if user:
-                login(request, user)
                 refresh = RefreshToken.for_user(user)
                 return Response({
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
                 }, status=status.HTTP_200_OK)
-        return Response({"error": "Login yoki parol xato"}, status=status.HTTP_400_BAD_REQUEST)
 
+        return Response({"error": "Login yoki parol xato"}, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]

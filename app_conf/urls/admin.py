@@ -16,6 +16,6 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    path('admin/', AdminListCreateApi.as_view(), name='admin-list'),
-    path('admin/<int:id>/', AdminDetailApi.as_view(), name='admin-detail'),
+    path('api/admins/', AdminListCreateApi.as_view(), name='admin-list'),
+    path('api/admins/<int:id>/', AdminDetailApi.as_view(), name='admin-detail'),
 ]
